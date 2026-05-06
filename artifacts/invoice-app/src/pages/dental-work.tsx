@@ -24,6 +24,10 @@ import {
   FilterX,
   FileDown,
   FileSpreadsheet,
+  Users,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import {
@@ -134,6 +138,8 @@ export default function DentalWorkPage() {
   const [dateTo, setDateTo] = useState("")
   const [exportingPdf, setExportingPdf] = useState(false)
   const exportRef = useRef<HTMLDivElement | null>(null)
+  const [doctorSortKey, setDoctorSortKey] = useState<"name" | "remaining" | "count">("remaining")
+  const [doctorSortDir, setDoctorSortDir] = useState<"asc" | "desc">("desc")
 
   const fetchData = async () => {
     setLoading(true)
@@ -172,6 +178,58 @@ export default function DentalWorkPage() {
   const totalGeneral = filteredWorks.reduce((s, w) => s + (w.generalCost || 0), 0)
   const totalMaterial = filteredWorks.reduce((s, w) => s + (w.materialCost || 0), 0)
   const totalRemaining = totalGeneral - totalMaterial
+
+  // Per-doctor summary respects ONLY the date filter so the user can always
+  // see every doctor in the active period, regardless of the search term.
+  const dateFilteredWorks = works.filter((w) => {
+    if (dateFrom && (!w.date || w.date < dateFrom)) return false
+    if (dateTo && (!w.date || w.date > dateTo)) return false
+    return true
+  })
+
+  type DoctorSummary = {
+    name: string
+    count: number
+    totalGeneral: number
+    totalMaterial: number
+    remaining: number
+  }
+  const doctorSummary: DoctorSummary[] = (() => {
+    const map = new Map<string, DoctorSummary>()
+    for (const w of dateFilteredWorks) {
+      const name = (w.doctorName || "غير محدد").trim() || "غير محدد"
+      const cur = map.get(name) || { name, count: 0, totalGeneral: 0, totalMaterial: 0, remaining: 0 }
+      cur.count += 1
+      cur.totalGeneral += w.generalCost || 0
+      cur.totalMaterial += w.materialCost || 0
+      cur.remaining = cur.totalGeneral - cur.totalMaterial
+      map.set(name, cur)
+    }
+    const arr = Array.from(map.values())
+    arr.sort((a, b) => {
+      const dir = doctorSortDir === "asc" ? 1 : -1
+      if (doctorSortKey === "name") return a.name.localeCompare(b.name, "ar") * dir
+      if (doctorSortKey === "count") return (a.count - b.count) * dir
+      return (a.remaining - b.remaining) * dir
+    })
+    return arr
+  })()
+
+  const toggleDoctorSort = (key: "name" | "remaining" | "count") => {
+    if (doctorSortKey === key) {
+      setDoctorSortDir(doctorSortDir === "asc" ? "desc" : "asc")
+    } else {
+      setDoctorSortKey(key)
+      setDoctorSortDir(key === "name" ? "asc" : "desc")
+    }
+  }
+
+  const handleDoctorClick = (name: string) => {
+    setSearchTerm(name)
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" })
+    }
+  }
 
   const filtersActive = Boolean(normalizedSearch || dateFrom || dateTo)
   const clearFilters = () => {
@@ -530,6 +588,239 @@ export default function DentalWorkPage() {
               <span>{isEditing ? "حفظ التعديلات" : "إضافة العمل"}</span>
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Per-doctor summary */}
+      <Card className="border-0 shadow-xl shadow-slate-200/60 rounded-2xl overflow-hidden bg-white mb-6 sm:mb-8">
+        <CardHeader className="bg-gradient-to-l from-indigo-600 via-purple-600 to-fuchsia-600 text-white p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="block truncate">ملخص الأطباء</span>
+                <span className="block text-[11px] sm:text-xs font-normal text-white/80">
+                  {dateFrom || dateTo
+                    ? `حسب نطاق التاريخ${dateFrom ? ` من ${dateFrom}` : ""}${dateTo ? ` إلى ${dateTo}` : ""}`
+                    : "كل الفترات"}
+                </span>
+              </div>
+            </div>
+            <span className="text-xs sm:text-sm font-medium bg-white/20 backdrop-blur px-3 py-1 rounded-full shrink-0">
+              {doctorSummary.length} {doctorSummary.length === 1 ? "طبيب" : "أطباء"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {doctorSummary.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                <Users className="w-7 h-7 text-slate-400" />
+              </div>
+              <p className="text-slate-700 font-semibold mb-1">لا يوجد أطباء في هذه الفترة</p>
+              <p className="text-sm text-slate-500">جرّب تغيير نطاق التاريخ أو أضف عملاً جديداً</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop / tablet table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
+                      <th className="text-right py-3 px-4 font-bold">
+                        <button
+                          type="button"
+                          onClick={() => toggleDoctorSort("name")}
+                          className="flex items-center gap-1.5 hover:text-indigo-700 transition-colors"
+                        >
+                          <span>اسم الدكتور</span>
+                          {doctorSortKey === "name" ? (
+                            doctorSortDir === "asc" ? (
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4 font-bold">
+                        <button
+                          type="button"
+                          onClick={() => toggleDoctorSort("count")}
+                          className="inline-flex items-center gap-1.5 hover:text-indigo-700 transition-colors"
+                        >
+                          <span>عدد الأعمال</span>
+                          {doctorSortKey === "count" ? (
+                            doctorSortDir === "asc" ? (
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="text-left py-3 px-4 font-bold">التكلفة العامة</th>
+                      <th className="text-left py-3 px-4 font-bold">تكلفة المواد</th>
+                      <th className="text-left py-3 px-4 font-bold">
+                        <button
+                          type="button"
+                          onClick={() => toggleDoctorSort("remaining")}
+                          className="inline-flex items-center gap-1.5 hover:text-indigo-700 transition-colors"
+                        >
+                          <span>المتبقي</span>
+                          {doctorSortKey === "remaining" ? (
+                            doctorSortDir === "asc" ? (
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doctorSummary.map((d) => {
+                      const isSelected = normalizedSearch === d.name.toLowerCase()
+                      return (
+                        <tr
+                          key={d.name}
+                          onClick={() => handleDoctorClick(d.name)}
+                          className={`cursor-pointer border-b border-slate-100 transition-colors ${
+                            isSelected ? "bg-indigo-50" : "hover:bg-slate-50"
+                          }`}
+                          title="اضغط لعرض أعمال هذا الطبيب فقط"
+                        >
+                          <td className="py-3 px-4 font-semibold text-slate-800">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                {d.name.trim().charAt(0) || "?"}
+                              </div>
+                              <span className="truncate">{d.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+                              {d.count}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-left font-semibold text-slate-700 tabular-nums">
+                            {fmtMoney(d.totalGeneral)}
+                          </td>
+                          <td className="py-3 px-4 text-left font-semibold text-orange-600 tabular-nums">
+                            {fmtMoney(d.totalMaterial)}
+                          </td>
+                          <td
+                            className={`py-3 px-4 text-left font-extrabold tabular-nums ${
+                              d.remaining < 0 ? "text-rose-600" : "text-emerald-600"
+                            }`}
+                          >
+                            {fmtMoney(d.remaining)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-900 text-white font-bold">
+                      <td className="py-3 px-4">الإجمالي</td>
+                      <td className="py-3 px-4 text-center">
+                        {doctorSummary.reduce((s, d) => s + d.count, 0)}
+                      </td>
+                      <td className="py-3 px-4 text-left tabular-nums">
+                        {fmtMoney(doctorSummary.reduce((s, d) => s + d.totalGeneral, 0))}
+                      </td>
+                      <td className="py-3 px-4 text-left tabular-nums">
+                        {fmtMoney(doctorSummary.reduce((s, d) => s + d.totalMaterial, 0))}
+                      </td>
+                      <td className="py-3 px-4 text-left tabular-nums">
+                        {fmtMoney(doctorSummary.reduce((s, d) => s + d.remaining, 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                <div className="flex items-center justify-end gap-2 px-3 py-2 bg-slate-50 text-xs text-slate-600">
+                  <span>ترتيب:</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleDoctorSort("name")}
+                    className={`px-2 py-1 rounded-lg ${doctorSortKey === "name" ? "bg-indigo-600 text-white" : "bg-white border border-slate-200"}`}
+                  >
+                    الاسم
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleDoctorSort("count")}
+                    className={`px-2 py-1 rounded-lg ${doctorSortKey === "count" ? "bg-indigo-600 text-white" : "bg-white border border-slate-200"}`}
+                  >
+                    العدد
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleDoctorSort("remaining")}
+                    className={`px-2 py-1 rounded-lg ${doctorSortKey === "remaining" ? "bg-indigo-600 text-white" : "bg-white border border-slate-200"}`}
+                  >
+                    المتبقي
+                  </button>
+                </div>
+                {doctorSummary.map((d) => {
+                  const isSelected = normalizedSearch === d.name.toLowerCase()
+                  return (
+                    <button
+                      key={d.name}
+                      type="button"
+                      onClick={() => handleDoctorClick(d.name)}
+                      className={`w-full text-right p-4 transition-colors ${isSelected ? "bg-indigo-50" : "active:bg-slate-50"}`}
+                    >
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
+                            {d.name.trim().charAt(0) || "?"}
+                          </div>
+                          <span className="font-bold text-slate-800 truncate">{d.name}</span>
+                        </div>
+                        <span className="inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold shrink-0">
+                          {d.count} عمل
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="bg-slate-50 rounded-lg p-2 text-center">
+                          <p className="text-slate-500 mb-0.5">عامة</p>
+                          <p className="font-bold text-slate-800 tabular-nums">{fmtMoney(d.totalGeneral)}</p>
+                        </div>
+                        <div className="bg-orange-50 rounded-lg p-2 text-center">
+                          <p className="text-orange-600 mb-0.5">مواد</p>
+                          <p className="font-bold text-orange-700 tabular-nums">{fmtMoney(d.totalMaterial)}</p>
+                        </div>
+                        <div
+                          className={`rounded-lg p-2 text-center ${d.remaining < 0 ? "bg-rose-50" : "bg-emerald-50"}`}
+                        >
+                          <p className={`mb-0.5 ${d.remaining < 0 ? "text-rose-600" : "text-emerald-600"}`}>متبقي</p>
+                          <p
+                            className={`font-extrabold tabular-nums ${d.remaining < 0 ? "text-rose-700" : "text-emerald-700"}`}
+                          >
+                            {fmtMoney(d.remaining)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
