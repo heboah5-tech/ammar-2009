@@ -15,38 +15,47 @@ function Header() {
   const isDental = location.startsWith("/dental-work");
 
   return (
-    <div className="border-b border-slate-200 bg-white shadow-sm">
-      <div className="container mx-auto py-6 sm:py-8 px-4">
-        <div className="text-center mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-1 sm:mb-2">
-            نظام الفواتير
-          </h1>
-          <p className="text-sm sm:text-base md:text-lg text-slate-600">إنشاء وإدارة الفواتير</p>
+    <div className="relative border-b border-slate-200/60 bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-30">
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
+      <div className="container mx-auto py-5 sm:py-7 px-4 relative" dir="rtl">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <Stethoscope className="w-6 h-6 text-white" />
+            </div>
+            <div className="text-right">
+              <h1 className="text-xl sm:text-2xl font-extrabold bg-gradient-to-l from-blue-700 to-indigo-700 bg-clip-text text-transparent leading-tight">
+                نظام الفواتير
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500">مختبر نورمار للأسنان</p>
+            </div>
+          </div>
+
+          <nav className="flex gap-1 sm:gap-2 bg-slate-100/80 p-1 rounded-2xl">
+            <Link
+              href="/"
+              className={`flex items-center gap-2 px-3 sm:px-5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
+                isInvoices
+                  ? "bg-white text-blue-700 shadow-md shadow-blue-500/10"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>الفواتير</span>
+            </Link>
+            <Link
+              href="/dental-work"
+              className={`flex items-center gap-2 px-3 sm:px-5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
+                isDental
+                  ? "bg-white text-blue-700 shadow-md shadow-blue-500/10"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Stethoscope className="w-4 h-4" />
+              <span>الأعمال السنية</span>
+            </Link>
+          </nav>
         </div>
-        <nav className="flex justify-center gap-2 sm:gap-3" dir="rtl">
-          <Link
-            href="/"
-            className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-lg font-medium text-sm sm:text-base transition-all ${
-              isInvoices
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>الفواتير</span>
-          </Link>
-          <Link
-            href="/dental-work"
-            className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-lg font-medium text-sm sm:text-base transition-all ${
-              isDental
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-            }`}
-          >
-            <Stethoscope className="w-4 h-4" />
-            <span>الأعمال السنية</span>
-          </Link>
-        </nav>
       </div>
     </div>
   );
@@ -67,7 +76,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50" dir="rtl">
+          <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/30" dir="rtl">
             <Header />
             <Router />
           </main>
