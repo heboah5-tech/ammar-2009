@@ -1,37 +1,37 @@
 # نظام الفواتير (Normar Dental Lab Invoice System)
 
-Arabic RTL invoice + dental work tracker for Normar Digital Dental Industry Lab. Migrated from a Vercel/v0 Next.js project to a Replit Vite + React app.
+Arabic RTL invoice + dental work tracker for Normar Digital Dental Industry Lab. Single-page React + Vite app.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/invoice-app run dev` — run the invoice web app
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- Firebase config is hardcoded (public web keys) in `artifacts/invoice-app/src/lib/firebase.ts`
+- `pnpm dev` — run the dev server (port 5000)
+- `pnpm build` — production build (outputs to `dist/public`)
+- `pnpm typecheck` — type check the project
+- `pnpm serve` — preview the production build
+- Firebase config is hardcoded (public web keys) in `src/lib/firebase.ts`
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- Web: React 18 + Vite 7 + Tailwind v4 + shadcn/ui + wouter
-- API: Express 5
-- Data: Firebase Firestore (collections: `invoices`, `dentalWorks`, `settings/materialsBudget`)
+- pnpm, Node.js 24, TypeScript ~5.9
+- React 18 + Vite 7 + Tailwind v4 + shadcn/ui + wouter
+- Firebase Firestore (collections: `invoices`, `dentalWorks`, `settings/materialsBudget`)
 - PDF: jspdf + html2canvas
 - Font: Almarai (Google Fonts) for Arabic text
 
 ## Where things live
 
-- `artifacts/invoice-app/src/App.tsx` — root, header nav, wouter routes
-- `artifacts/invoice-app/src/pages/invoices.tsx` — invoice tabs (form / preview / list) + Firestore save / PDF / print
-- `artifacts/invoice-app/src/pages/dental-work.tsx` — dental work tracker page (budget + entries)
-- `artifacts/invoice-app/src/components/invoice-form.tsx|invoice-preview.tsx|invoice-list.tsx` — invoice components
-- `artifacts/invoice-app/src/lib/firebase.ts` — Firebase init
-- `artifacts/invoice-app/public/normar.png` — lab logo
-- `artifacts/invoice-app/src/index.css` — theme tokens (HSL), Almarai font import
+- `src/App.tsx` — root, header nav, wouter routes
+- `src/pages/invoices.tsx` — invoice tabs (form / preview / list) + Firestore save / PDF / print
+- `src/pages/dental-work.tsx` — dental work tracker page (budget + entries)
+- `src/components/invoice-form.tsx|invoice-preview.tsx|invoice-list.tsx` — invoice components
+- `src/lib/firebase.ts` — Firebase init
+- `public/normar.png` — lab logo
+- `src/index.css` — theme tokens (HSL), Almarai font import
 
 ## Architecture decisions
 
 - Migrated from Next.js App Router to Vite + wouter — no SSR needed, single-user dental lab tool
+- Originally bootstrapped inside a pnpm-workspace monorepo with multiple artifacts; flattened to a single root app
 - Firestore directly from the client (public anon access pattern from original v0 app); no backend persistence layer
 - All UI is RTL with `dir="rtl"` and Arabic copy; Almarai font loaded both via CSS `@import` and `<link>` for reliability
 - Dental work budget stored as singleton doc at `settings/materialsBudget`; remaining = budget − sum(entries.materialCost)
@@ -49,9 +49,10 @@ Arabic RTL invoice + dental work tracker for Normar Digital Dental Industry Lab.
 
 - Firestore writes block on network; alerts surface success/error
 - `index.css` HSL vars must remain in `H S% L%` format (no `hsl(...)` wrapper) since `@theme inline` wraps them
-- When adding pages, remember to add a nav link in `App.tsx`'s `Header`
+- When adding pages, remember to add a nav link in `src/App.tsx`'s `Header`
+- Vite dev server reads `PORT` (defaults to 5000) and `BASE_PATH` (defaults to `/`) env vars
 
 ## Pointers
 
-- See `.local/skills/pnpm-workspace`, `.local/skills/react-vite`, `.local/skills/artifacts` for workspace and artifact conventions
-- Original Next.js source preserved at `.migration-backup/` for reference
+- `.local/skills/react-vite` for Vite/React conventions
+- `.local/skills/workflows` for workflow management
