@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +22,8 @@ import {
   Inbox,
   Search,
   FilterX,
+  FileDown,
+  FileSpreadsheet,
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import {
@@ -130,6 +132,8 @@ export default function DentalWorkPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [exportingPdf, setExportingPdf] = useState(false)
+  const exportRef = useRef<HTMLDivElement | null>(null)
 
   const fetchData = async () => {
     setLoading(true)
@@ -174,6 +178,100 @@ export default function DentalWorkPage() {
     setSearchTerm("")
     setDateFrom("")
     setDateTo("")
+  }
+
+  const buildExportFilename = (ext: "pdf" | "csv") => {
+    const parts: string[] = ["dental-works"]
+    if (normalizedSearch) parts.push(searchTerm.trim().replace(/\s+/g, "-"))
+    if (dateFrom || dateTo) parts.push(`${dateFrom || "..."}_to_${dateTo || "..."}`)
+    if (parts.length === 1) parts.push(new Date().toISOString().split("T")[0])
+    return `${parts.join("_")}.${ext}`
+  }
+
+  const filterSummary = () => {
+    const bits: string[] = []
+    if (normalizedSearch) bits.push(`بحث: ${searchTerm.trim()}`)
+    if (dateFrom) bits.push(`من: ${dateFrom}`)
+    if (dateTo) bits.push(`إلى: ${dateTo}`)
+    return bits.length > 0 ? bits.join(" — ") : "كل الأعمال"
+  }
+
+  const fmtMoney = (n: number) =>
+    new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 }).format(n)
+
+  const handleExportCsv = () => {
+    if (filteredWorks.length === 0) return
+    const headers = [
+      "التاريخ",
+      "اسم الدكتور",
+      "اسم المريض",
+      "نوع العمل",
+      "عدد الأسنان",
+      "اللون",
+      "التكلفة العامة",
+      "تكلفة المواد",
+      "المتبقي",
+    ]
+    const escape = (v: string | number) => {
+      const s = String(v ?? "")
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = filteredWorks.map((w) => [
+      w.date || "",
+      w.doctorName || "",
+      w.patientName || "",
+      w.workType || "",
+      w.teethCount || 0,
+      w.color || "",
+      w.generalCost || 0,
+      w.materialCost || 0,
+      (w.generalCost || 0) - (w.materialCost || 0),
+    ])
+    const totals = ["", "", "", "الإجمالي", "", "", totalGeneral, totalMaterial, totalRemaining]
+    const csv = [headers, ...rows, totals].map((r) => r.map(escape).join(",")).join("\n")
+    // BOM so Excel detects UTF-8 + Arabic correctly
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = buildExportFilename("csv")
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportPdf = async () => {
+    if (filteredWorks.length === 0 || !exportRef.current) return
+    setExportingPdf(true)
+    try {
+      const { jsPDF } = await import("jspdf")
+      const html2canvas = (await import("html2canvas")).default
+      const element = exportRef.current
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" })
+      const imgData = canvas.toDataURL("image/png")
+      const pdf = new jsPDF("p", "mm", "a4")
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pageWidth
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight
+      let position = 0
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+      pdf.save(buildExportFilename("pdf"))
+    } catch (e) {
+      console.error("Error exporting PDF:", e)
+      alert("حدث خطأ أثناء تصدير PDF")
+    } finally {
+      setExportingPdf(false)
+    }
   }
 
   const resetForm = () => {
@@ -485,22 +583,52 @@ export default function DentalWorkPage() {
                 </Field>
               </div>
             </div>
-            {filtersActive && (
-              <div className="mt-3 flex items-center justify-between">
-                <p className="text-xs text-slate-600">
-                  عرض {filteredWorks.length} من أصل {works.length} عمل
-                </p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-600">
+                {filtersActive
+                  ? `عرض ${filteredWorks.length} من أصل ${works.length} عمل`
+                  : `إجمالي ${works.length} عمل`}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  onClick={clearFilters}
+                  onClick={handleExportCsv}
+                  disabled={filteredWorks.length === 0}
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-2 rounded-xl h-9"
+                  className="flex items-center gap-2 rounded-xl h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  title="تصدير إلى Excel/CSV"
                 >
-                  <FilterX className="w-4 h-4" />
-                  <span>مسح الفلاتر</span>
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>تصدير Excel</span>
                 </Button>
+                <Button
+                  onClick={handleExportPdf}
+                  disabled={filteredWorks.length === 0 || exportingPdf}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 rounded-xl h-9 border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                  title="تصدير إلى PDF"
+                >
+                  {exportingPdf ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileDown className="w-4 h-4" />
+                  )}
+                  <span>تصدير PDF</span>
+                </Button>
+                {filtersActive && (
+                  <Button
+                    onClick={clearFilters}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2 rounded-xl h-9"
+                  >
+                    <FilterX className="w-4 h-4" />
+                    <span>مسح الفلاتر</span>
+                  </Button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {loading ? (
@@ -738,6 +866,76 @@ export default function DentalWorkPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Hidden printable export view */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: "-10000px",
+          width: "794px",
+          background: "#ffffff",
+        }}
+      >
+        <div ref={exportRef} dir="rtl" style={{ padding: "24px", fontFamily: "Almarai, sans-serif", color: "#0f172a" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a8a", paddingBottom: "12px", marginBottom: "16px" }}>
+            <div>
+              <h1 style={{ fontSize: "22px", fontWeight: 800, margin: 0, color: "#1e3a8a" }}>سجل الأعمال السنية</h1>
+              <p style={{ fontSize: "12px", color: "#475569", margin: "4px 0 0" }}>مختبر نورمار للأسنان</p>
+            </div>
+            <div style={{ textAlign: "left", fontSize: "12px", color: "#475569" }}>
+              <p style={{ margin: 0 }}>تاريخ التصدير: {new Date().toISOString().split("T")[0]}</p>
+              <p style={{ margin: "4px 0 0" }}>عدد السجلات: {filteredWorks.length}</p>
+            </div>
+          </div>
+          <div style={{ background: "#f1f5f9", padding: "10px 12px", borderRadius: "8px", marginBottom: "16px", fontSize: "12px", color: "#334155" }}>
+            <strong>الفلاتر: </strong>
+            {filterSummary()}
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <thead>
+              <tr style={{ background: "#1e3a8a", color: "#ffffff" }}>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "right" }}>التاريخ</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "right" }}>الدكتور</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "right" }}>المريض</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "right" }}>نوع العمل</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "center" }}>الأسنان</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "center" }}>اللون</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "left" }}>التكلفة</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "left" }}>المواد</th>
+                <th style={{ padding: "8px", border: "1px solid #1e3a8a", textAlign: "left" }}>المتبقي</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredWorks.map((w, i) => {
+                const rem = (w.generalCost || 0) - (w.materialCost || 0)
+                return (
+                  <tr key={w.id || i} style={{ background: i % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "right" }}>{w.date || "-"}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "right" }}>{w.doctorName || "-"}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "right" }}>{w.patientName || "-"}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "right" }}>{w.workType || "-"}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "center" }}>{w.teethCount || 0}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "center" }}>{w.color || "-"}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "left" }}>{fmtMoney(w.generalCost || 0)}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "left" }}>{fmtMoney(w.materialCost || 0)}</td>
+                    <td style={{ padding: "6px 8px", border: "1px solid #e2e8f0", textAlign: "left", color: rem >= 0 ? "#047857" : "#b91c1c", fontWeight: 600 }}>{fmtMoney(rem)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "#0f172a", color: "#ffffff", fontWeight: 700 }}>
+                <td colSpan={6} style={{ padding: "8px", border: "1px solid #0f172a", textAlign: "right" }}>الإجمالي</td>
+                <td style={{ padding: "8px", border: "1px solid #0f172a", textAlign: "left" }}>{fmtMoney(totalGeneral)}</td>
+                <td style={{ padding: "8px", border: "1px solid #0f172a", textAlign: "left" }}>{fmtMoney(totalMaterial)}</td>
+                <td style={{ padding: "8px", border: "1px solid #0f172a", textAlign: "left" }}>{fmtMoney(totalRemaining)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
