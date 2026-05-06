@@ -1,12 +1,12 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, Eye, Download, Printer, Save, List } from 'lucide-react'
+import { FileText, Eye, Download, Printer, Save, List, X, Loader2, Pencil } from 'lucide-react'
 import InvoiceForm from "@/components/invoice-form"
 import InvoicePreview from "@/components/invoice-preview"
 import InvoiceList from "@/components/invoice-list"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, Timestamp } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore"
 
 interface InvoiceData {
   invoiceNumber: string
@@ -40,26 +40,79 @@ export default function InvoicesPage() {
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(initialInvoiceData)
   const [refreshList, setRefreshList] = useState(0)
   const [active, setActive] = useState('form')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const normalizeInvoice = (raw: any): InvoiceData => {
+    const { id, totalAmount, createdAt, updatedAt, subtotal, discountAmount, discount, discounts, items, ...rest } = raw || {}
+    let normalizedDiscounts: InvoiceData["discounts"]
+    if (Array.isArray(discounts)) {
+      normalizedDiscounts = discounts
+    } else if (typeof discount === "number" && discount > 0) {
+      normalizedDiscounts = [
+        { id: "1", amount: discount, date: rest.date || new Date().toISOString().split("T")[0], description: "خصم" },
+      ]
+    } else {
+      normalizedDiscounts = []
+    }
+    return {
+      ...initialInvoiceData,
+      ...rest,
+      items: Array.isArray(items) && items.length > 0 ? items : initialInvoiceData.items,
+      discounts: normalizedDiscounts,
+    }
+  }
+
+  const handleLoadInvoice = (data: InvoiceData) => {
+    setEditingId(null)
+    setInvoiceData(normalizeInvoice(data))
+  }
+
+  const handleEditInvoice = (invoice: InvoiceData & { id?: string; totalAmount?: number; createdAt?: any }) => {
+    const id = (invoice as any).id
+    setInvoiceData(normalizeInvoice(invoice))
+    setEditingId(id || null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setInvoiceData(initialInvoiceData)
+  }
 
   const handleSaveToFirestore = async () => {
+    setSaving(true)
     try {
       const subtotal = invoiceData.items.reduce((sum, item) => sum + item.quantity * item.price, 0)
       const discountAmount = invoiceData.discounts.reduce((sum, d) => sum + d.amount, 0)
       const totalAmount = subtotal - discountAmount
 
-      await addDoc(collection(db, "invoices"), {
-        ...invoiceData,
-        subtotal,
-        discountAmount,
-        totalAmount,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      })
+      if (editingId) {
+        await updateDoc(doc(db, "invoices", editingId), {
+          ...invoiceData,
+          subtotal,
+          discountAmount,
+          totalAmount,
+          updatedAt: Timestamp.now(),
+        })
+        alert("تم تحديث الفاتورة بنجاح")
+      } else {
+        await addDoc(collection(db, "invoices"), {
+          ...invoiceData,
+          subtotal,
+          discountAmount,
+          totalAmount,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        })
+        alert("تم حفظ الفاتورة بنجاح")
+      }
+      setEditingId(null)
       setRefreshList(prev => prev + 1)
-      alert("تم حفظ الفاتورة بنجاح")
     } catch (error) {
       console.error("Error saving invoice:", error)
       alert("خطأ في حفظ الفاتورة")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -143,14 +196,39 @@ export default function InvoicesPage() {
           </TabsTrigger>
         </TabsList>
 
+        {editingId && (
+          <div className="mb-4 sm:mb-6 flex items-center justify-between gap-3 bg-amber-50 border-2 border-amber-200 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-amber-800">
+              <Pencil className="w-4 h-4" />
+              <span className="text-sm font-semibold">
+                وضع التعديل — تقوم حالياً بتعديل الفاتورة رقم {invoiceData.invoiceNumber}
+              </span>
+            </div>
+            <Button
+              onClick={handleCancelEdit}
+              size="sm"
+              variant="outline"
+              className="border-amber-300 text-amber-700 hover:bg-amber-100 hover:text-amber-900 rounded-lg flex items-center gap-1.5"
+            >
+              <X className="w-4 h-4" />
+              <span>إلغاء التعديل</span>
+            </Button>
+          </div>
+        )}
+
         <TabsContent value="form" className="space-y-4 sm:space-y-6">
           <InvoiceForm data={invoiceData} onChange={setInvoiceData} />
         </TabsContent>
 
         <TabsContent value="preview" className="space-y-4 sm:space-y-6">
           <div className="flex gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap">
-            <Button onClick={handleSaveToFirestore} className="flex-1 sm:flex-none bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2 rounded-lg px-3 sm:px-6 py-2 font-medium text-sm sm:text-base">
-              <Save className="w-4 h-4" /><span>حفظ</span>
+            <Button
+              onClick={handleSaveToFirestore}
+              disabled={saving}
+              className={`flex-1 sm:flex-none ${editingId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'} text-white flex items-center justify-center gap-2 rounded-lg px-3 sm:px-6 py-2 font-medium text-sm sm:text-base`}
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>{editingId ? 'حفظ التعديلات' : 'حفظ'}</span>
             </Button>
             <Button onClick={handleDownloadPDF} className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2 rounded-lg px-3 sm:px-6 py-2 font-medium text-sm sm:text-base">
               <Download className="w-4 h-4" /><span>تحميل PDF</span>
@@ -163,7 +241,13 @@ export default function InvoicesPage() {
         </TabsContent>
 
         <TabsContent value="list" className="space-y-4 sm:space-y-6">
-          <InvoiceList refreshTrigger={refreshList} onLoadInvoice={setInvoiceData as any} setActive={setActive} />
+          <InvoiceList
+            refreshTrigger={refreshList}
+            onLoadInvoice={handleLoadInvoice}
+            onEditInvoice={handleEditInvoice}
+            setActive={setActive}
+            editingId={editingId}
+          />
         </TabsContent>
       </Tabs>
     </div>
