@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, Eye, Download, Printer, Save, List, X, Loader2, Pencil } from 'lucide-react'
+import { FileText, Eye, Download, Printer, Save, List, X, Loader2, Pencil, Receipt, Sparkles } from 'lucide-react'
 import InvoiceForm from "@/components/invoice-form"
 import InvoicePreview from "@/components/invoice-preview"
 import InvoiceList from "@/components/invoice-list"
@@ -206,75 +206,148 @@ export default function InvoicesPage() {
     }
   }
 
+  const tabMeta: Record<string, { label: string; sub: string; icon: any; from: string; to: string }> = {
+    form: { label: "إنشاء فاتورة", sub: "أدخل بيانات الفاتورة وأصنافها", icon: FileText, from: "from-blue-600", to: "to-indigo-600" },
+    preview: { label: "معاينة الفاتورة", sub: "راجع الفاتورة قبل الحفظ والطباعة", icon: Eye, from: "from-purple-600", to: "to-fuchsia-600" },
+    list: { label: "قائمة الفواتير", sub: "تصفح وحرّر الفواتير المحفوظة", icon: List, from: "from-emerald-600", to: "to-teal-600" },
+  }
+  const current = tabMeta[active] || tabMeta.form
+  const HeroIcon = current.icon
+
   return (
-    <div className="container mx-auto py-6 sm:py-8 px-4">
-      <Tabs value={active} className="w-full max-w-6xl mx-auto">
-        <TabsList className="grid w-full grid-cols-3 mb-6 sm:mb-8 bg-slate-100 p-1 rounded-lg">
-          <TabsTrigger onClick={() => setActive('form')} value="form" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm rounded text-xs sm:text-sm">
-            <FileText className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">النموذج</span><span className="sm:hidden">الإدخال</span>
-          </TabsTrigger>
-          <TabsTrigger onClick={() => setActive('preview')} value="preview" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm rounded text-xs sm:text-sm">
-            <Eye className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">معاينة</span><span className="sm:hidden">العرض</span>
-          </TabsTrigger>
-          <TabsTrigger onClick={() => setActive('list')} value="list" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm rounded text-xs sm:text-sm">
-            <List className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">القائمة</span><span className="sm:hidden">القوائم</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {editingId && (
-          <div className="mb-4 sm:mb-6 flex items-center justify-between gap-3 bg-amber-50 border-2 border-amber-200 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-2 text-amber-800">
-              <Pencil className="w-4 h-4" />
-              <span className="text-sm font-semibold">
-                وضع التعديل — تقوم حالياً بتعديل الفاتورة رقم {invoiceData.invoiceNumber}
-              </span>
+    <div className="min-h-[calc(100vh-80px)] bg-gradient-to-b from-slate-50 via-white to-slate-50">
+      <div className="container mx-auto py-6 sm:py-8 px-4">
+        <div className="w-full max-w-6xl mx-auto">
+          {/* Hero header */}
+          <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${current.from} ${current.to} p-5 sm:p-7 mb-5 sm:mb-7 shadow-xl shadow-slate-300/40 transition-all`}>
+            <div className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-white/10" />
+            <div className="absolute -bottom-12 -right-12 w-48 h-48 rounded-full bg-white/5" />
+            <div className="relative flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+                <HeroIcon className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-white/80 text-xs sm:text-sm font-medium mb-1">
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>نظام الفواتير</span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight truncate">{current.label}</h1>
+                <p className="text-white/85 text-xs sm:text-sm mt-0.5">{current.sub}</p>
+              </div>
             </div>
-            <Button
-              onClick={handleCancelEdit}
-              size="sm"
-              variant="outline"
-              className="border-amber-300 text-amber-700 hover:bg-amber-100 hover:text-amber-900 rounded-lg flex items-center gap-1.5"
-            >
-              <X className="w-4 h-4" />
-              <span>إلغاء التعديل</span>
-            </Button>
           </div>
-        )}
 
-        <TabsContent value="form" className="space-y-4 sm:space-y-6">
-          <InvoiceForm data={invoiceData} onChange={setInvoiceData} />
-        </TabsContent>
+          <Tabs value={active} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-5 sm:mb-7 bg-white p-1.5 rounded-2xl shadow-md shadow-slate-200/60 border border-slate-100 h-auto">
+              <TabsTrigger
+                onClick={() => setActive('form')}
+                value="form"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 transition-all data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-blue-300/40"
+              >
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">النموذج</span>
+                <span className="sm:hidden">الإدخال</span>
+              </TabsTrigger>
+              <TabsTrigger
+                onClick={() => setActive('preview')}
+                value="preview"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 transition-all data-[state=active]:bg-gradient-to-br data-[state=active]:from-purple-600 data-[state=active]:to-fuchsia-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-300/40"
+              >
+                <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">معاينة</span>
+                <span className="sm:hidden">العرض</span>
+              </TabsTrigger>
+              <TabsTrigger
+                onClick={() => setActive('list')}
+                value="list"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 transition-all data-[state=active]:bg-gradient-to-br data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-300/40"
+              >
+                <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">القائمة</span>
+                <span className="sm:hidden">القوائم</span>
+              </TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="preview" className="space-y-4 sm:space-y-6">
-          <div className="flex gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap">
-            <Button
-              onClick={handleSaveToFirestore}
-              disabled={saving}
-              className={`flex-1 sm:flex-none ${editingId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'} text-white flex items-center justify-center gap-2 rounded-lg px-3 sm:px-6 py-2 font-medium text-sm sm:text-base`}
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>{editingId ? 'حفظ التعديلات' : 'حفظ'}</span>
-            </Button>
-            <Button onClick={handleDownloadPDF} className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2 rounded-lg px-3 sm:px-6 py-2 font-medium text-sm sm:text-base">
-              <Download className="w-4 h-4" /><span>تحميل PDF</span>
-            </Button>
-            <Button onClick={handleGeneratePDF} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 rounded-lg px-3 sm:px-6 py-2 font-medium text-sm sm:text-base">
-              <Printer className="w-4 h-4" /><span>طباعة</span>
-            </Button>
-          </div>
-          <InvoicePreview data={invoiceData} />
-        </TabsContent>
+            {editingId && (
+              <div className="mb-5 sm:mb-6 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-200 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 shadow-sm shadow-amber-100/60">
+                <div className="flex items-center gap-2.5 text-amber-900">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center">
+                    <Pencil className="w-4 h-4 text-amber-700" />
+                  </div>
+                  <div className="leading-tight">
+                    <p className="text-xs text-amber-700 font-medium">وضع التعديل</p>
+                    <p className="text-sm font-bold">تعديل الفاتورة رقم {invoiceData.invoiceNumber}</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleCancelEdit}
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-800 hover:bg-amber-100 hover:text-amber-900 rounded-xl flex items-center gap-1.5 h-9"
+                >
+                  <X className="w-4 h-4" />
+                  <span>إلغاء التعديل</span>
+                </Button>
+              </div>
+            )}
 
-        <TabsContent value="list" className="space-y-4 sm:space-y-6">
-          <InvoiceList
-            refreshTrigger={refreshList}
-            onLoadInvoice={handleLoadInvoice}
-            onEditInvoice={handleEditInvoice}
-            setActive={setActive}
-            editingId={editingId}
-          />
-        </TabsContent>
-      </Tabs>
+            <TabsContent value="form" className="space-y-4 sm:space-y-6 mt-0">
+              <InvoiceForm data={invoiceData} onChange={setInvoiceData} />
+            </TabsContent>
+
+            <TabsContent value="preview" className="space-y-4 sm:space-y-6 mt-0">
+              <div className="bg-white rounded-2xl shadow-md shadow-slate-200/60 border border-slate-100 p-3 sm:p-4 mb-4 sm:mb-5">
+                <div className="flex items-center justify-between gap-3 mb-3 px-1">
+                  <div className="flex items-center gap-2 text-slate-700">
+                    <Sparkles className="w-4 h-4 text-purple-500" />
+                    <span className="text-xs sm:text-sm font-semibold">إجراءات الفاتورة</span>
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-slate-500 hidden sm:inline">احفظ ثم حمّل أو اطبع</span>
+                </div>
+                <div className="flex gap-2 sm:gap-3 flex-wrap">
+                  <Button
+                    onClick={handleSaveToFirestore}
+                    disabled={saving}
+                    className={`flex-1 sm:flex-none text-white flex items-center justify-center gap-2 rounded-xl px-4 sm:px-6 py-2.5 h-11 font-semibold text-sm sm:text-base shadow-lg transition-all disabled:opacity-60 ${
+                      editingId
+                        ? 'bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-amber-200/60'
+                        : 'bg-gradient-to-br from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 shadow-purple-200/60'
+                    }`}
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>{saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديلات' : 'حفظ الفاتورة'}</span>
+                  </Button>
+                  <Button
+                    onClick={handleDownloadPDF}
+                    className="flex-1 sm:flex-none bg-gradient-to-br from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white flex items-center justify-center gap-2 rounded-xl px-4 sm:px-6 py-2.5 h-11 font-semibold text-sm sm:text-base shadow-lg shadow-emerald-200/60"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>تحميل PDF</span>
+                  </Button>
+                  <Button
+                    onClick={handleGeneratePDF}
+                    className="flex-1 sm:flex-none bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center justify-center gap-2 rounded-xl px-4 sm:px-6 py-2.5 h-11 font-semibold text-sm sm:text-base shadow-lg shadow-blue-200/60"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>طباعة</span>
+                  </Button>
+                </div>
+              </div>
+              <InvoicePreview data={invoiceData} />
+            </TabsContent>
+
+            <TabsContent value="list" className="space-y-4 sm:space-y-6 mt-0">
+              <InvoiceList
+                refreshTrigger={refreshList}
+                onLoadInvoice={handleLoadInvoice}
+                onEditInvoice={handleEditInvoice}
+                setActive={setActive}
+                editingId={editingId}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
     </div>
   )
 }
