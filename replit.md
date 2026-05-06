@@ -1,45 +1,57 @@
-# [Project name]
+# نظام الفواتير (Normar Dental Lab Invoice System)
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Arabic RTL invoice + dental work tracker for Normar Digital Dental Industry Lab. Migrated from a Vercel/v0 Next.js project to a Replit Vite + React app.
 
 ## Run & Operate
 
+- `pnpm --filter @workspace/invoice-app run dev` — run the invoice web app
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run typecheck` — typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Firebase config is hardcoded (public web keys) in `artifacts/invoice-app/src/lib/firebase.ts`
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
+- Web: React 18 + Vite 7 + Tailwind v4 + shadcn/ui + wouter
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Data: Firebase Firestore (collections: `invoices`, `dentalWorks`, `settings/materialsBudget`)
+- PDF: jspdf + html2canvas
+- Font: Almarai (Google Fonts) for Arabic text
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/invoice-app/src/App.tsx` — root, header nav, wouter routes
+- `artifacts/invoice-app/src/pages/invoices.tsx` — invoice tabs (form / preview / list) + Firestore save / PDF / print
+- `artifacts/invoice-app/src/pages/dental-work.tsx` — dental work tracker page (budget + entries)
+- `artifacts/invoice-app/src/components/invoice-form.tsx|invoice-preview.tsx|invoice-list.tsx` — invoice components
+- `artifacts/invoice-app/src/lib/firebase.ts` — Firebase init
+- `artifacts/invoice-app/public/normar.png` — lab logo
+- `artifacts/invoice-app/src/index.css` — theme tokens (HSL), Almarai font import
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Migrated from Next.js App Router to Vite + wouter — no SSR needed, single-user dental lab tool
+- Firestore directly from the client (public anon access pattern from original v0 app); no backend persistence layer
+- All UI is RTL with `dir="rtl"` and Arabic copy; Almarai font loaded both via CSS `@import` and `<link>` for reliability
+- Dental work budget stored as singleton doc at `settings/materialsBudget`; remaining = budget − sum(entries.materialCost)
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Invoices page**: build, preview, save to Firestore, print, and download invoices as PDF; list and reload past invoices
+- **Dental work page**: set a global materials budget, log per-entry dental work (doctor, patient, work type, teeth count, color, material cost), see remaining budget after auto-deducting all entries
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Arabic UI (RTL), preserve original v0 layout and Normar branding
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Firestore writes block on network; alerts surface success/error
+- `index.css` HSL vars must remain in `H S% L%` format (no `hsl(...)` wrapper) since `@theme inline` wraps them
+- When adding pages, remember to add a nav link in `App.tsx`'s `Header`
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See `.local/skills/pnpm-workspace`, `.local/skills/react-vite`, `.local/skills/artifacts` for workspace and artifact conventions
+- Original Next.js source preserved at `.migration-backup/` for reference
