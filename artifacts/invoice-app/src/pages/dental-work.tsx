@@ -20,6 +20,8 @@ import {
   Palette,
   CalendarDays,
   Inbox,
+  Search,
+  FilterX,
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import {
@@ -125,6 +127,10 @@ export default function DentalWorkPage() {
 
   const [form, setForm] = useState<DentalWork>(emptyForm())
 
+  const [searchTerm, setSearchTerm] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -145,9 +151,30 @@ export default function DentalWorkPage() {
   }, [])
 
   const formRemaining = (form.generalCost || 0) - (form.materialCost || 0)
-  const totalGeneral = works.reduce((s, w) => s + (w.generalCost || 0), 0)
-  const totalMaterial = works.reduce((s, w) => s + (w.materialCost || 0), 0)
+
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+  const filteredWorks = works.filter((w) => {
+    if (normalizedSearch) {
+      const haystack = [w.doctorName, w.patientName, w.workType]
+        .map((v) => (v || "").toLowerCase())
+        .join(" ")
+      if (!haystack.includes(normalizedSearch)) return false
+    }
+    if (dateFrom && (!w.date || w.date < dateFrom)) return false
+    if (dateTo && (!w.date || w.date > dateTo)) return false
+    return true
+  })
+
+  const totalGeneral = filteredWorks.reduce((s, w) => s + (w.generalCost || 0), 0)
+  const totalMaterial = filteredWorks.reduce((s, w) => s + (w.materialCost || 0), 0)
   const totalRemaining = totalGeneral - totalMaterial
+
+  const filtersActive = Boolean(normalizedSearch || dateFrom || dateTo)
+  const clearFilters = () => {
+    setSearchTerm("")
+    setDateFrom("")
+    setDateTo("")
+  }
 
   const resetForm = () => {
     setForm(emptyForm())
@@ -220,8 +247,8 @@ export default function DentalWorkPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         <StatCard
           icon={Stethoscope}
-          label="عدد الأعمال"
-          value={String(works.length)}
+          label={filtersActive ? "الأعمال المعروضة" : "عدد الأعمال"}
+          value={String(filteredWorks.length)}
           tone="blue"
         />
         <StatCard
@@ -419,11 +446,63 @@ export default function DentalWorkPage() {
               <span>سجل الأعمال</span>
             </div>
             <span className="text-xs sm:text-sm font-medium bg-white/20 backdrop-blur px-3 py-1 rounded-full">
-              {works.length} عمل
+              {filtersActive ? `${filteredWorks.length} من ${works.length}` : `${works.length} عمل`}
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          {/* Filters */}
+          <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div className="sm:col-span-6">
+                <Field label="بحث (دكتور، مريض، نوع العمل)" icon={Search}>
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="ابحث بالاسم أو نوع العمل..."
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-3">
+                <Field label="من تاريخ" icon={CalendarDays}>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-3">
+                <Field label="إلى تاريخ" icon={CalendarDays}>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+            </div>
+            {filtersActive && (
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-xs text-slate-600">
+                  عرض {filteredWorks.length} من أصل {works.length} عمل
+                </p>
+                <Button
+                  onClick={clearFilters}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 rounded-xl h-9"
+                >
+                  <FilterX className="w-4 h-4" />
+                  <span>مسح الفلاتر</span>
+                </Button>
+              </div>
+            )}
+          </div>
+
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -436,6 +515,23 @@ export default function DentalWorkPage() {
               </div>
               <p className="text-slate-700 font-semibold mb-1">لا توجد أعمال مسجلة</p>
               <p className="text-sm text-slate-500">ابدأ بإضافة عمل جديد من النموذج أعلاه</p>
+            </div>
+          ) : filteredWorks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                <Search className="w-8 h-8 text-slate-400" />
+              </div>
+              <p className="text-slate-700 font-semibold mb-1">لا توجد نتائج مطابقة</p>
+              <p className="text-sm text-slate-500 mb-3">جرّب تعديل البحث أو نطاق التاريخ</p>
+              <Button
+                onClick={clearFilters}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 rounded-xl h-9"
+              >
+                <FilterX className="w-4 h-4" />
+                <span>مسح الفلاتر</span>
+              </Button>
             </div>
           ) : (
             <>
@@ -457,7 +553,7 @@ export default function DentalWorkPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {works.map((w) => {
+                    {filteredWorks.map((w) => {
                       const rem = (w.generalCost || 0) - (w.materialCost || 0)
                       return (
                         <tr
@@ -554,7 +650,7 @@ export default function DentalWorkPage() {
 
               {/* Mobile cards */}
               <div className="md:hidden divide-y divide-slate-100">
-                {works.map((w) => {
+                {filteredWorks.map((w) => {
                   const rem = (w.generalCost || 0) - (w.materialCost || 0)
                   return (
                     <div
