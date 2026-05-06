@@ -8,6 +8,16 @@ import InvoiceList from "@/components/invoice-list"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore"
 
+interface PersistedInvoice extends Partial<InvoiceData> {
+  id?: string
+  subtotal?: number
+  totalAmount?: number
+  discountAmount?: number
+  discount?: number
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+}
+
 interface InvoiceData {
   invoiceNumber: string
   date: string
@@ -43,14 +53,30 @@ export default function InvoicesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const normalizeInvoice = (raw: any): InvoiceData => {
-    const { id, totalAmount, createdAt, updatedAt, subtotal, discountAmount, discount, discounts, items, ...rest } = raw || {}
+  const normalizeInvoice = (raw: PersistedInvoice): InvoiceData => {
+    const {
+      id: _id,
+      totalAmount: _totalAmount,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      subtotal: _subtotal,
+      discountAmount: _discountAmount,
+      discount,
+      discounts,
+      items,
+      ...rest
+    } = raw
     let normalizedDiscounts: InvoiceData["discounts"]
     if (Array.isArray(discounts)) {
       normalizedDiscounts = discounts
     } else if (typeof discount === "number" && discount > 0) {
       normalizedDiscounts = [
-        { id: "1", amount: discount, date: rest.date || new Date().toISOString().split("T")[0], description: "خصم" },
+        {
+          id: "1",
+          amount: discount,
+          date: rest.date || new Date().toISOString().split("T")[0],
+          description: "خصم",
+        },
       ]
     } else {
       normalizedDiscounts = []
@@ -63,15 +89,14 @@ export default function InvoicesPage() {
     }
   }
 
-  const handleLoadInvoice = (data: InvoiceData) => {
+  const handleLoadInvoice = (data: PersistedInvoice) => {
     setEditingId(null)
     setInvoiceData(normalizeInvoice(data))
   }
 
-  const handleEditInvoice = (invoice: InvoiceData & { id?: string; totalAmount?: number; createdAt?: any }) => {
-    const id = (invoice as any).id
+  const handleEditInvoice = (invoice: PersistedInvoice) => {
     setInvoiceData(normalizeInvoice(invoice))
-    setEditingId(id || null)
+    setEditingId(invoice.id ?? null)
   }
 
   const handleCancelEdit = () => {
