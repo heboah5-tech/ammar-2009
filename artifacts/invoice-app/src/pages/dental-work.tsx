@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Plus,
   Trash2,
+  Save,
   Loader2,
+  Pencil,
+  X,
   Stethoscope,
   Wallet,
   TrendingDown,
@@ -27,6 +30,7 @@ import {
   orderBy,
   deleteDoc,
   doc,
+  updateDoc,
   Timestamp,
 } from "firebase/firestore"
 
@@ -43,7 +47,7 @@ interface DentalWork {
   createdAt?: any
 }
 
-const emptyForm: DentalWork = {
+const emptyForm = (): DentalWork => ({
   doctorName: "",
   workType: "",
   teethCount: 1,
@@ -52,7 +56,7 @@ const emptyForm: DentalWork = {
   generalCost: 0,
   materialCost: 0,
   date: new Date().toISOString().split("T")[0],
-}
+})
 
 function StatCard({
   icon: Icon,
@@ -116,8 +120,10 @@ const inputCls =
 export default function DentalWorkPage() {
   const [works, setWorks] = useState<DentalWork[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState<DentalWork>(emptyForm)
+  const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const [form, setForm] = useState<DentalWork>(emptyForm())
 
   const fetchData = async () => {
     setLoading(true)
@@ -143,24 +149,55 @@ export default function DentalWorkPage() {
   const totalMaterial = works.reduce((s, w) => s + (w.materialCost || 0), 0)
   const totalRemaining = totalGeneral - totalMaterial
 
-  const handleAddWork = async () => {
+  const resetForm = () => {
+    setForm(emptyForm())
+    setEditingId(null)
+  }
+
+  const handleEdit = (w: DentalWork) => {
+    if (!w.id) return
+    setEditingId(w.id)
+    setForm({
+      doctorName: w.doctorName || "",
+      workType: w.workType || "",
+      teethCount: w.teethCount || 1,
+      color: w.color || "",
+      patientName: w.patientName || "",
+      generalCost: w.generalCost || 0,
+      materialCost: w.materialCost || 0,
+      date: w.date || new Date().toISOString().split("T")[0],
+    })
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    }
+  }
+
+  const handleSubmit = async () => {
     if (!form.doctorName.trim() || !form.patientName.trim()) {
       alert("الرجاء إدخال اسم الدكتور واسم المريض")
       return
     }
-    setSaving(true)
+    setSubmitting(true)
     try {
-      await addDoc(collection(db, "dentalWorks"), {
-        ...form,
-        createdAt: Timestamp.now(),
-      })
-      setForm(emptyForm)
+      if (editingId) {
+        const { id: _id, createdAt: _createdAt, ...payload } = form
+        await updateDoc(doc(db, "dentalWorks", editingId), {
+          ...payload,
+          updatedAt: Timestamp.now(),
+        })
+      } else {
+        await addDoc(collection(db, "dentalWorks"), {
+          ...form,
+          createdAt: Timestamp.now(),
+        })
+      }
+      resetForm()
       fetchData()
     } catch (e) {
       console.error(e)
-      alert("خطأ في إضافة العمل")
+      alert(editingId ? "خطأ في تحديث العمل" : "خطأ في إضافة العمل")
     } finally {
-      setSaving(false)
+      setSubmitting(false)
     }
   }
 
@@ -168,11 +205,14 @@ export default function DentalWorkPage() {
     if (!confirm("هل أنت متأكد من الحذف؟")) return
     try {
       await deleteDoc(doc(db, "dentalWorks", id))
+      if (editingId === id) resetForm()
       fetchData()
     } catch (e) {
       console.error(e)
     }
   }
+
+  const isEditing = editingId !== null
 
   return (
     <div className="container mx-auto py-6 sm:py-8 px-4 max-w-6xl" dir="rtl">
@@ -204,14 +244,20 @@ export default function DentalWorkPage() {
         />
       </div>
 
-      {/* Add Work Form */}
+      {/* Add / Edit Work Form */}
       <Card className="border-0 shadow-xl shadow-slate-200/60 rounded-2xl overflow-hidden mb-6 sm:mb-8 bg-white">
-        <CardHeader className="bg-gradient-to-l from-blue-600 via-blue-700 to-indigo-700 text-white p-4 sm:p-6">
+        <CardHeader
+          className={`${
+            isEditing
+              ? "bg-gradient-to-l from-amber-600 via-amber-700 to-orange-700"
+              : "bg-gradient-to-l from-blue-600 via-blue-700 to-indigo-700"
+          } text-white p-4 sm:p-6`}
+        >
           <CardTitle className="text-base sm:text-lg flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
-              <Plus className="w-5 h-5" />
+              {isEditing ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
             </div>
-            <span>إضافة عمل جديد</span>
+            <span>{isEditing ? "تعديل العمل" : "إضافة عمل جديد"}</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-5 sm:pt-7 p-4 sm:p-6">
@@ -328,18 +374,35 @@ export default function DentalWorkPage() {
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end">
+          <div className="mt-6 flex justify-end gap-2">
+            {isEditing && (
+              <Button
+                onClick={resetForm}
+                disabled={submitting}
+                variant="outline"
+                className="flex items-center gap-2 rounded-xl px-6 h-11"
+              >
+                <X className="w-4 h-4" />
+                <span>إلغاء</span>
+              </Button>
+            )}
             <Button
-              onClick={handleAddWork}
-              disabled={saving}
-              className="bg-gradient-to-l from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-2 rounded-xl px-6 sm:px-8 h-11 shadow-lg shadow-blue-500/30 font-semibold"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className={`${
+                isEditing
+                  ? "bg-gradient-to-l from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-amber-500/30"
+                  : "bg-gradient-to-l from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-500/30"
+              } text-white flex items-center gap-2 rounded-xl px-6 sm:px-8 h-11 shadow-lg font-semibold`}
             >
-              {saving ? (
+              {submitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isEditing ? (
+                <Save className="w-4 h-4" />
               ) : (
                 <Plus className="w-4 h-4" />
               )}
-              <span>إضافة العمل</span>
+              <span>{isEditing ? "حفظ التعديلات" : "إضافة العمل"}</span>
             </Button>
           </div>
         </CardContent>
@@ -397,7 +460,12 @@ export default function DentalWorkPage() {
                     {works.map((w) => {
                       const rem = (w.generalCost || 0) - (w.materialCost || 0)
                       return (
-                        <tr key={w.id} className="border-b border-slate-100 hover:bg-blue-50/40 transition-colors">
+                        <tr
+                          key={w.id}
+                          className={`border-b border-slate-100 transition-colors ${
+                            editingId === w.id ? "bg-amber-50" : "hover:bg-blue-50/40"
+                          }`}
+                        >
                           <td className="p-3 text-slate-600 whitespace-nowrap">{w.date}</td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
@@ -437,14 +505,26 @@ export default function DentalWorkPage() {
                             </span>
                           </td>
                           <td className="p-3 text-center">
-                            <Button
-                              onClick={() => handleDelete(w.id!)}
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                onClick={() => handleEdit(w)}
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg"
+                                title="تعديل"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDelete(w.id!)}
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                                title="حذف"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -477,7 +557,10 @@ export default function DentalWorkPage() {
                 {works.map((w) => {
                   const rem = (w.generalCost || 0) - (w.materialCost || 0)
                   return (
-                    <div key={w.id} className="p-4 hover:bg-slate-50">
+                    <div
+                      key={w.id}
+                      className={`p-4 ${editingId === w.id ? "bg-amber-50" : "hover:bg-slate-50"}`}
+                    >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">
@@ -488,14 +571,26 @@ export default function DentalWorkPage() {
                             <p className="text-xs text-slate-500">{w.patientName}</p>
                           </div>
                         </div>
-                        <Button
-                          onClick={() => handleDelete(w.id!)}
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            onClick={() => handleEdit(w)}
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50 rounded-lg"
+                            title="تعديل"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            onClick={() => handleDelete(w.id!)}
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 rounded-lg"
+                            title="حذف"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 mb-3 text-xs">
