@@ -24,6 +24,7 @@ import {
   FilterX,
   FileDown,
   FileSpreadsheet,
+  Archive,
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import {
@@ -36,6 +37,7 @@ import {
   doc,
   updateDoc,
   Timestamp,
+  writeBatch,
 } from "firebase/firestore"
 
 interface DentalWork {
@@ -49,6 +51,9 @@ interface DentalWork {
   materialCost: number
   date: string
   createdAt?: any
+  archived?: boolean
+  archivedAt?: any
+  archivePeriod?: string
 }
 
 const emptyForm = (): DentalWork => ({
@@ -133,6 +138,7 @@ export default function DentalWorkPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const exportRef = useRef<HTMLDivElement | null>(null)
 
   const fetchData = async () => {
@@ -142,7 +148,8 @@ export default function DentalWorkPage() {
       const snap = await getDocs(q)
       const data: DentalWork[] = []
       snap.forEach((d) => data.push({ id: d.id, ...d.data() } as DentalWork))
-      setWorks(data)
+      // Hide archived entries from the active list — they live on the archive page.
+      setWorks(data.filter((w) => !w.archived))
     } catch (e) {
       console.error("Error fetching dental works:", e)
     } finally {
@@ -323,6 +330,51 @@ export default function DentalWorkPage() {
       alert(editingId ? "خطأ في تحديث العمل" : "خطأ في إضافة العمل")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleArchiveMonth = async () => {
+    const active = works.filter((w) => !w.archived && w.id)
+    if (active.length === 0) {
+      alert("لا يوجد أعمال للأرشفة")
+      return
+    }
+    // Use local time so the period matches the user's month, not UTC.
+    const now = new Date()
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+    if (
+      !confirm(
+        `سيتم نقل جميع الأعمال الحالية (${active.length}) إلى أرشيف ${period} وتفريغ القائمة. يمكن مراجعتها لاحقاً في صفحة الأرشيف. هل تريد المتابعة؟`,
+      )
+    )
+      return
+    setArchiving(true)
+    try {
+      const ts = Timestamp.now()
+      // Firestore caps a writeBatch at 500 ops, so chunk to be safe.
+      const CHUNK = 450
+      let archivedCount = 0
+      for (let i = 0; i < active.length; i += CHUNK) {
+        const slice = active.slice(i, i + CHUNK)
+        const batch = writeBatch(db)
+        for (const w of slice) {
+          if (!w.id) continue
+          batch.update(doc(db, "dentalWorks", w.id), {
+            archived: true,
+            archivedAt: ts,
+            archivePeriod: period,
+          })
+        }
+        await batch.commit()
+        archivedCount += slice.length
+      }
+      await fetchData()
+      alert(`تمت أرشفة ${archivedCount} عمل ضمن ${period}`)
+    } catch (e) {
+      console.error(e)
+      alert("حدث خطأ أثناء الأرشفة. قد تكون بعض الأعمال قد أُرشفت — يرجى تحديث الصفحة والمحاولة مرة أخرى.")
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -600,6 +652,21 @@ export default function DentalWorkPage() {
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>تصدير Excel</span>
+                </Button>
+                <Button
+                  onClick={handleArchiveMonth}
+                  disabled={archiving || works.length === 0}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 rounded-xl h-9 border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                  title="أرشفة جميع الأعمال الحالية وبدء شهر جديد"
+                >
+                  {archiving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Archive className="w-4 h-4" />
+                  )}
+                  <span>أرشفة الشهر</span>
                 </Button>
                 <Button
                   onClick={handleExportPdf}

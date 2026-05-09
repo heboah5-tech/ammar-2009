@@ -2,10 +2,11 @@ import { Switch, Route, Link, useLocation, Router as WouterRouter } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { FileText, Stethoscope } from "lucide-react";
+import { FileText, Stethoscope, Archive } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import InvoicesPage from "@/pages/invoices";
 import DentalWorkPage from "@/pages/dental-work";
+import ArchivePage from "@/pages/archive";
 
 const queryClient = new QueryClient();
 
@@ -13,6 +14,7 @@ function Header() {
   const [location] = useLocation();
   const isInvoices = location === "/" || location.startsWith("/invoices");
   const isDental = location.startsWith("/dental-work");
+  const isArchive = location.startsWith("/archive");
 
   return (
     <div className="relative border-b border-slate-200/60 bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-30">
@@ -54,6 +56,17 @@ function Header() {
               <Stethoscope className="w-4 h-4" />
               <span>الأعمال السنية</span>
             </Link>
+            <Link
+              href="/archive"
+              className={`flex items-center gap-2 px-3 sm:px-5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
+                isArchive
+                  ? "bg-white text-purple-700 shadow-md shadow-purple-500/10"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Archive className="w-4 h-4" />
+              <span>الأرشيف</span>
+            </Link>
           </nav>
         </div>
       </div>
@@ -66,6 +79,7 @@ function Router() {
     <Switch>
       <Route path="/" component={InvoicesPage} />
       <Route path="/dental-work" component={DentalWorkPage} />
+      <Route path="/archive" component={ArchivePage} />
       <Route component={NotFound} />
     </Switch>
   );
