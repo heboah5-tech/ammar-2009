@@ -197,9 +197,16 @@ export default function InvoicesPage() {
       const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" })
       const imgData = canvas.toDataURL("image/png")
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
-      const imgWidth = 210
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight)
+      // Fit the entire invoice on a single A4 page: scale by the tighter of
+      // width/height ratios, then center on the page.
+      const pageWidth = pdf.internal.pageSize.getWidth() // 210mm
+      const pageHeight = pdf.internal.pageSize.getHeight() // 297mm
+      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height)
+      const renderWidth = canvas.width * ratio
+      const renderHeight = canvas.height * ratio
+      const offsetX = (pageWidth - renderWidth) / 2
+      const offsetY = (pageHeight - renderHeight) / 2
+      pdf.addImage(imgData, "PNG", offsetX, offsetY, renderWidth, renderHeight)
       pdf.save(`فاتورة-${invoiceData.invoiceNumber}.pdf`)
     } catch (error) {
       console.error("خطأ في إنشاء PDF:", error)
