@@ -253,7 +253,7 @@ export default function DentalWorkPage() {
     setExportingPdf(true)
     try {
       const { jsPDF } = await import("jspdf")
-      const html2canvas = (await import("html2canvas")).default
+      const html2canvas = (await import("html2canvas-pro")).default
       const element = exportRef.current
       const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" })
       const imgData = canvas.toDataURL("image/png")
@@ -342,12 +342,19 @@ export default function DentalWorkPage() {
     // Use local time so the period matches the user's month, not UTC.
     const now = new Date()
     const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-    if (
-      !confirm(
-        `سيتم نقل جميع الأعمال الحالية (${active.length}) إلى أرشيف ${period} وتفريغ القائمة. يمكن مراجعتها لاحقاً في صفحة الأرشيف. هل تريد المتابعة؟`,
-      )
-    )
-      return
+    const totalGen = active.reduce((s, w) => s + (w.generalCost || 0), 0)
+    const totalMat = active.reduce((s, w) => s + (w.materialCost || 0), 0)
+    const remaining = totalGen - totalMat
+    const confirmMsg =
+      `تأكيد الأرشفة\n` +
+      `———————————————\n` +
+      `سيتم نقل ${active.length} عمل إلى أرشيف شهر ${period} وتفريغ القائمة الحالية.\n\n` +
+      `إجمالي التكلفة العامة: ${totalGen.toFixed(2)}\n` +
+      `إجمالي تكلفة المواد: ${totalMat.toFixed(2)}\n` +
+      `المتبقي: ${remaining.toFixed(2)}\n\n` +
+      `يمكنك مراجعة الأعمال المؤرشفة لاحقاً من صفحة "الأرشيف".\n\n` +
+      `هل تريد المتابعة؟`
+    if (!confirm(confirmMsg)) return
     setArchiving(true)
     try {
       const ts = Timestamp.now()
@@ -369,7 +376,12 @@ export default function DentalWorkPage() {
         archivedCount += slice.length
       }
       await fetchData()
-      alert(`تمت أرشفة ${archivedCount} عمل ضمن ${period}`)
+      alert(
+        `تمت الأرشفة بنجاح ✓\n` +
+          `———————————————\n` +
+          `تم نقل ${archivedCount} عمل إلى أرشيف شهر ${period}.\n` +
+          `يمكنك الآن البدء بتسجيل أعمال الشهر الجديد، أو مراجعة الأعمال المؤرشفة من صفحة "الأرشيف".`,
+      )
     } catch (e) {
       console.error(e)
       alert("حدث خطأ أثناء الأرشفة. قد تكون بعض الأعمال قد أُرشفت — يرجى تحديث الصفحة والمحاولة مرة أخرى.")

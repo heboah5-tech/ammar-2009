@@ -191,7 +191,7 @@ export default function InvoicesPage() {
   const handleDownloadPDF = async () => {
     try {
       const { jsPDF } = await import("jspdf")
-      const html2canvas = (await import("html2canvas")).default
+      const html2canvas = (await import("html2canvas-pro")).default
       const element = document.getElementById("invoice-preview")
       if (!element) return
       const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" })
